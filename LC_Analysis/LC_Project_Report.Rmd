@@ -1,0 +1,143 @@
+---
+title: 'Stat 652 Semester Project: Lending Club Challenge Report'
+author: "Michael Najarro"
+date: "3/16/2020"
+output: pdf_document
+---
+
+# *Abstract*
+
+The goal of this project is to predict whether a borrower will be at risk to default on his or her loan. Here I classify lending club members based on the response variable loan status. After refining the initial data performing and tuning a random forest classification model, I was able classify the likelihood of a banking client defaulting as being a risk or safe lend with   Accuracy of 97.71% (95% CI: (0.9746, 0.9795)), Sensitivity 0f 89.21% and Specificity of 99.46%. The variables with greatest contribution to classification was the value of colelction recovery fees and last payment amount   
+
+
+# *Introduction*
+ Lending Club is a peer-to-peer lending company where Lending club facilitates the borrowing and leasing of capital amongst its clients, with minimal fees. This financial system allows for local economies to grow by allowing its members to fund its members privately and also gain from such investments.
+ 
+ The Lending club data used was posted on 2018 as part of a Kaggle competition to evalaute the likelihood of whether a borrower would be at risk or not at risk for defaulting on a micro loan. Originally the data set contained infromation on borrowers from 2007 up to 2018 (roughly 2 million rows). The goal of this project was to  classify whether borrower defaulted or did not default on his or her loan, for a small subset of the years offered, from 2012 to 2014, and for the variable Loan Stauts
+
+# *Methods* 
+
+## Importing the lending club data to the R environment
+
+Due to the limitations in computing power of my local machine, I was able to obtain a 10% portion of the of the 2012-2014 Lending club data; I applied a stratified random sample to the 3 years of the issue_d column and extracted those rows from the main data set.
+
+The response variable,Loan Status, was a factor variable contain 6 levels on the condition of the loan: "Fully paid", "Does not meet the credit policy. Status:Fully Paid", "In Grace Period", "Late (16-30 days)", "Late (31-120 days)", "Charged Off", "Default", "Does not meet the credit policy. Status:Charged Off."
+
+For the sake of classification I combined "Fully paid" and "Does not meet the credit policy. Status:Fully Paid" Into one classifier called "safe," and all other levels into another classifier called "risk."
+
+From there, I then applied a random stratified sample to each year of 2012 through 2014 such that the total sample collected represented 20% of the 2012-2014 years. The procedures for collecting this data can be found in a seperate Rmarkdown file titled "LC_data_cleaning.Rmd." 
+
+## Munging the data
+
+I used several approaches to clean the data:
+
+1. I removed any personal identifying variables (two existed)
+
+2. I removed all rows whose response variable had a value of NA.
+
+3. I removed all predictor variables that contained 50% more of its measures as NA.
+
+4. I then took a detailed look at factor and numeric variables:
+  
+  a. for factor variables, any variables that were cateogircal measures of another numeric variable column, had many levels, and ahd an uneven spread of data amongst its levels I removed.
+  
+  b. for numeric variables, Any variables that contained low variance, highly skewed distributions, and/or had high correlations, I removed
+
+5. For remaining Nas, I imputed the median value for numeric variables, and then removed Nas for factor variables.
+
+The remaining predictor variables are presented below, as well the remaining data used to perform the classification. Note that the variable "chance default" is the response variable and that there were no remaining NAs within the data.
+
+```{r message=FALSE, echo=FALSE}
+library(knitr)
+a<- readRDS(file="v4data.rds")
+vari <- as.data.frame(colnames(a))
+colnames(vari) <-  c("variables")
+
+kable(vari, caption = "Variables names of the refined lending club data")
+```
+
+
+```{r message=FALSE, echo=FALSE}
+dimen <- data.frame(cbind("rows"=nrow(a),"columns"=ncol(a)))
+
+kable(dimen, caption = "Dimensions of refined lending club data")
+```
+
+## Analysis and results
+
+To evaluate whether I could remove more variables I applied LASSO regression analysis for further variable selection. Surprisiingly the analysis indicated not to exlude all variables despite their near zero value
+
+```{r message=FALSE, echo=FALSE}
+LCTF10<-readRDS(file="v3data.rds")
+library(glmnet)
+library(tidyverse)
+
+a<- LCTF10 %>%
+  select_if(is.numeric)
+
+# 1 = safe, 0 = risk
+a$borrower_status <- as.numeric(as.factor(LCTF10$borrower_status)) - 1
+x <- model.matrix(borrower_status~., data = a)[,-43]
+y <- a$borrower_status
+
+lasso_mod <- glmnet(x, y, alpha = 0)
+
+set.seed(1443)
+lasso_cvfit <- cv.glmnet(x, y, alpha=0)
+lasso_cvfit$lambda.min # selected labda value
+
+#plot with alpha threshold
+plot(lasso_mod, xvar = "lambda")
+abline(v=log(lasso_cvfit$lambda.min))
+
+ 
+coef(lasso_cvfit, s="lambda.min")
+lasso_coefs <- as.numeric(coef(lasso_cvfit, s="lambda.min"))
+sum(abs(lasso_coefs) > 0)
+```
+
+
+I performed a random forest classification algorithm on the remaining data, which I split into test and training data. I used all predictors and then used the model to predict loan status outcomes on the test data. 
+
+Using Caret to tune my model, I modified the model to have 325 trees and set mtry equal to 46. Results below indicate the ouput of the Random forest confusion matrix:
+
+### **Confusion Matrix and Statistics**
+
+Reference
+Prediction  risk  safe
+      risk  2249    67
+      safe   272 12229
+                                          
+ Accuracy : 0.9771          
+ 95% CI : (0.9746, 0.9795)
+ No Information Rate : 0.8299          
+ P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+ Kappa : 0.9163          
+                                          
+ Mcnemar's Test P-Value : < 2.2e-16       
+                                          
+ Sensitivity : 0.8921          
+ Specificity : 0.9946          
+ Pos Pred Value : 0.9711          
+ Neg Pred Value : 0.9782          
+ Prevalence : 0.1701          
+ Detection Rate : 0.1518          
+ Detection Prevalence : 0.1563  
+
+
+#  *Conclusion* 
+
+The reduction in data greatly increased the predictive power of the model. Specificity was quite accurate at 99%, while sensitivity was at 89%; accuracy was quite high at 98%. the False negative rate was at .45%. Part of the specificty's low value was due to an uneven balance in the number of risky to safe outcomes on defaulting loans even after combining levels  of loan status. Further, a majority of the variables kept in the model were all equally poor in contributing to the classification of loan status based on the Lasso regresison analysis and the contribution of each predictor variable in purity at each node split (gini-index, see figure below).
+
+```{r mesage=FALSE, echo=FALSE}
+# Plot importance of each variable to rf2 on model accuracy and puirty (gini index)
+library(randomForest)
+rf2<-readRDS(file="rf2model.rds")
+
+varImpPlot(rf2)
+```
+
+We see that collection recovery fee, last payment amount and total recieved interest (to lender) contributed greatly to average Gini index per tree if the variable was excluded, indicating high importance to classification to defaulting.  
+
+Overall, I find that the great majority of observational data is not of importance to classification, and only a few variables were ableto help create an ensemble consensus for predicting loan default status.

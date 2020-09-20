@@ -1,0 +1,193 @@
+---
+title: 'Kaggle Lending Club Project Part I: Data Extraction'
+author: "Michael Najarro"
+date: "6/9/2020"
+output: html_document
+---
+
+# *Introduction*
+ Back in 2017 Kaggle had a competition to analyze Lending CLub Loan data, to predict how much of a risk clients were in lending and paying back loans. The data set is large, ranging from years 2007 to 2014, consisting of both accepted ann rejected loan data sets.
+
+In this two part project I attempt I attempt to classify clients into various risk levels and see how those levels are predictive in the final outcome of the client's loan (whether they ended up paying back or not). My analysis should equal or improve on the accuracies already achieved in the past competition.
+
+Due to limitations in RAM, I approached the analysis of this data set by only analyzing the accepeted loan data from years 2012 to 2014.
+
+I will use the 5-step learning process from Lantz's **Modern Data Science with R**, Exercise 8.3 (Exercise 8.1):
+  
+    Step 1 – collect data
+    
+    Step 2 – exploring and preparing the data
+    
+    Step 3 – training a model on the data
+    
+    Step 4 – evaluating model performance
+    
+    Step 5 – improving model performance
+
+
+# *Objective*
+The following report is a reproducible protocal for extracting out the the accepted loan data for years 2012 to 2014.
+
+The data are in the accepted_2007_2018q4.csv data file.
+
+
+## Step 1: Load packages
+
+```{r}
+library(pacman)
+p_load(tidyverse,Amelia,survey)
+```
+
+
+## Step 2. Read the full data set into the environment
+
+Note that steps 2.a and 2.b were initially ran once to obtain an rds file of the full data, which you can automatically upload from step 2.c. In order to make this code reproducible on my repository
+
+```{r}
+#2.a) read the csv into the environment. this line of code
+# is ran once and doesn't need to be run again.
+#full_data<- read.csv(file = "./accepted_2007_to_2018q4/accepted_2007_to_2018Q4.csv", header= TRUE)
+
+#2.b) save the full data into an rds file, full_data.
+#saveRDS(object = full_data, file = "LCData.rds")
+
+#2.c) Reload rds file back to the environment.
+ full_data<-readRDS(file= "LCData.rds")
+```
+
+
+## Step 3: Split the issue_d into 2 columns, issue month and year
+```{r}
+full_data <- full_data %>% 
+  separate(issue_d, into = c("Issue_Month", "Issue_Year"), sep="-")
+```
+
+
+## Step 4: Check out the response variable.
+
+The response variable is **Loan_Status**.
+
+the code below shows that if you only look at default status alone, you won't have enough data to work with! only 1 default within 2012-2014.
+
+```{r}
+full_data %>%
+  filter( loan_status == "Default") %>%
+  filter(Issue_Year %in% c("2012", "2013", "2014"))
+```
+
+
+Thus our classification scheme isn't binary. What are the other levels of loan status? There are 10 levels of loan status:
+
+```{r}
+levels(full_data$loan_status)
+```
+
+
+"Fully paid" and "Does not meet the credit policy. Status:Fully Paid" can be classified as fully paid.
+
+For class "current", there is still more of the loan to be paid, but whatever portion has been paid isn't late so the borrow is in good standing. Thus I classify "current" with the "fully paid" classes.
+
+The second class would be all the other levels where someone hasn't paid: Both "Late" classes, "In grace period", "Default", "Charged off", and "Does not meet the credit policy. Status:Charged Off". 
+
+
+## Step 5. Create a new binary categorical response variable.
+
+group together as "safe client":
+    
+    "Fully paid"
+
+    "Does not meet the credit policy. Status:Fully Paid" 
+
+    "Current"
+
+group together as "risky client":
+
+    "In Grace Period"                                    
+
+    "Late (16-30 days)"                                  
+
+    "Late (31-120 days)"
+
+    "Charged Off"                                        
+
+    "Default"                                            
+
+    "Does not meet the credit policy. Status:Charged Off"
+
+
+```{r}
+full_data <- full_data %>%
+  mutate(borrower_status = ifelse(loan_status == "Current" | loan_status == "Fully Paid" | loan_status == "Does not meet the credit policy. Status:Fully Paid", "safe client", "risky client"))
+```
+
+Analyze your new response variable; the unique levels and frequency counts within each. There are many more safe than risky clients, with roughly 13% being risky, and 87% being safe clients to lend money.
+
+```{r}
+unique(full_data$borrower_status)
+
+table(full_data$borrower_status)
+
+prop.table(table(full_data$borrower_status))
+```
+
+
+## Step 6: Subset years 2012- 2014.
+
+```{r}
+#6.a) convert issue year from character to type integer
+full_data$Issue_Year <- as.integer(full_data$Issue_Year)
+
+#6.b) now filter for years 2012 through 2014
+tf <- full_data %>% filter(between(Issue_Year, 2012, 2014))
+
+#6.c) toss the full data
+rm(full_data)
+```
+
+
+## Step 7: Check on the number of rows each year has, and then estimate the proportions of representation each should have in this subsetted data.
+
+The percent of represenation of each year, and each binary response category represented within each year are not evenly distributed within the reduced data set.
+
+```{r}
+#7.a) data representation per year
+table(tf$Issue_Year)
+
+#7.b) number of safe and risky clients within time frame
+table(tf$borrower_status)
+
+#7.c) % representation of each year within the data
+prop.table(table(tf$Issue_Year))
+
+#7.d) make a table of number of type of borrower per year
+tab2<- table(tf$borrower_status, tf$Issue_Year)
+prop.table(tab2, margin = 1)
+```
+
+
+## Step 8: Take a stratified random sample of the data
+
+To help get a more representative data set, I take a random stratified sample of each year such that each year gets an equal 33% represention of a subset of the full data. When all years are combined, the randomly sampled data will be 20% of the 423,810 records of tf, or 84,762 records.
+
+```{r}
+#8.a) take your stratified sample
+reducedtwfr <- stratsample(as.character(tf$Issue_Year), counts = c("2012" = 28254, "2013" = 28254, "2014" = 28254))
+
+#8.b) now select the rows from tf based on reducedtwfr
+tf2 <- tf[reducedtwfr,]
+
+#8.c) check the response and predictor variables
+prop.table(table(tf2$borrower_status))
+table(tf2$loan_status)
+```
+
+The propotions of response classifiers is close to an 80:20 representation, and the number of unique loan status classifiers is reduced to 6 classes.
+
+
+# Step 9: Save the final sampled data to an rds file for future use.
+
+```{r}
+rm(tf, reducedtwfr,tab2)
+
+saveRDS(object = tf2, file = "cleaneddata.rds")
+```

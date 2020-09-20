@@ -1,0 +1,9 @@
+{
+    "path" : "~/MAN-portfolio/Kaggle_Lending_Club/LC_Data_Prep",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}

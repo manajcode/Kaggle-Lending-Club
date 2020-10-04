@@ -2,4 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
-LC_Data_Prep/accepted_2007_to_2018q4/
+LC_Data_Prep/accepted_2007_to_2018q4/accepted_2007_to_2018q4.csv
+LC_Data_Prep/LCData.rds

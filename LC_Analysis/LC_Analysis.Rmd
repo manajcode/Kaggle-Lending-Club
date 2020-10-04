@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r, echo = FALSE, message =FALSE}
 library(pacman)
-p_load(tidyverse, tinytex, Amelia, knitr, DataExplorer, imputeMissings, corrplot)
+p_load(tidyverse, tinytex, Amelia, knitr, DataExplorer, imputeMissings, corrplot, magrittr)
 ```
 
 # *Objective*
@@ -16,7 +16,7 @@ The goal of this project is to predict whether a borrower will be at risk to def
 # *Introduction*
 Due to the limitations in computing power of my local machine, I was able to obtain a 10% portion of the of the 2012-2014 Lending club data; I applied a stratified random sample to the 3 years of the issue_d column and extracted those rows from the main data set. The procedures for collecting this data can be found in a seperate Rmarkdown file titled "LC_data_cleaning.Rmd." Note that I converted the response variable loan_status to a binary categorical variable called "borrower status" already.
 
-## **Step 1: collect data**
+## **Phase 1: collecting the data**
 
 ### 1.a) Import the lending club data to the R environment.
 
@@ -48,7 +48,7 @@ kable(dimen, format = "html", caption = "fig 2. dimensions of the lending club d
 ```
 
 
-## *Step 2: Exploring and preparing the data*
+## **Phase 2: Data exploration**
 
 ### 2.a) Investigate the descriptive statistics using an automated data exploration pacakage.
 
@@ -69,10 +69,12 @@ There are several important features of the data:
   
     3. There 152 predictor variables. Of these, over half of the variables are continuous data types.
     
-    4. There are 2.012 million NAs out of 6.44 million cells, or approximately 31.2% of the data is NAs. The NA columns can be seen in the data explorer report, hwoever there are too many variables plotted to read the names of the columns that have 95% missing data.
+    4. There are 2.012 million NAs out of 6.44 million cells, or approximately 31.2% of the data is NAs. The NA columns can be seen in the data explorer report, however there are too many variables plotted to read the names of the columns that have 95% missing data.
 
 
-### 2.c) Identify and remove all ID variables.
+## **Phase 3: data cleaning on the response variable and unique identifier columns**
+
+### 3.a) Identify and remove all ID variables.
 
 ID variables cannot be kept in for any analysis, as they will produce overfitting.
 
@@ -81,11 +83,9 @@ LCTF10 <- LCTF10 %>% select(-id, -member_id)
 ```
 
 
-**Step 3: Deal with NAs**
+### 3.b) Dealing with the response variable; any NAs?
 
-### 3.a) Remove records whose response variable is NA by subsetting out the rows with valid data.
-
-There are no records containing an NA within the response column borrower_status.
+Any records whose response variable is NA must be removed; no prediction can be made on an NA. Thus the first thing to do is to identify the unique values of the response and identify which rows have an NA value.
 
 ```{r}
 table(LCTF10$borrower_status)
@@ -93,21 +93,56 @@ table(LCTF10$borrower_status)
 table(is.na(LCTF10$borrower_status))
 ```
 
+There are no records containing an NA within the response column, so our response variable is clean.
 
-### 3.b) Evaluate the presence of NAs in other columns.
 
-Using the missmap function from Amelia gives a global view of the missing values across all data in a grid fashion.
+## **Phase 4: Predictor variable reduction** 
+
+Here I apply a process to remove columns that provide no information in the ability to classify loan borrowers as risky or safe. The steps are as follows:
+
+    a. Evaluate the variables that have almost no ability to classify based on the percentage of NA values 
+  
+    b. Identify "repeat" variables, variablese that contain the same dat of anothert column but in a different type (e.g. 1 vs "one")
+    
+    c. Identify variables that have too may classes or distinct values for a variable of type categorical or character; that is to say, too much variability for character or categorical varibles.
+  
+    d. Identify the variables that contain numeric or integer data but have too little variability.
+
+    e. Variables that have data that cannot be analyzed (e.g. columns with notes, aka "empty values")
+
+    f. remove "loan status", the original response variable that was transformed into a binary classifier.
+    
+    g. remove any date columns within the data set; not helpful, similar to c.
+    
+    h. Identify the variables that contain a high degree of correlation with 1 or more other variables.
+
+
+### 4.a.1) Evaluate the percent of NAs in the predictor variables.
+
+To begin, I identify the percent frequency of NAs per each predictor variable, and specifically present the variables whose percentage of NAs is greater than 60%. In general a variable whose missing more than half of its data cannot be used to predict an outcome, as the probability of selecting a values is by default already below 50%. I select a slightly higher percentage than 50% to select variables that can provide better information and power in their ability to classify outcomes. 
+
 
 ```{r}
-# a visual approach to the number of NAs.
-#missmap(LCTF10)
+percentnas <- sapply(LCTF10,function(x) round(sum(is.na(x))/nrow(LCTF10), digits = 2) )
 
-# counts of NAs per column.
-#sapply(LCTF10,function(x) sum(is.na(x)))
+percentnas <- as.data.frame(percentnas) %>%
+  rename(percent = percentnas) %>%
+  mutate(variable = rownames(.) ) %>%
+  filter(percent > .49) %>%
+  select(variable, percent) %>%
+  arrange(desc(percent)) %>%
+  mutate(count= 1:nrow(.)) %>%
+  select(count, variable, percent)
+
+kable(percentnas, caption = "Predictors with  high proportions of NAs", align = 'l')
 ```
 
+There were 43 predictor variables whose percentage of NAs was greater than 50%.
 
-### 3.c) Check which predictor columns have 50% or more NAs, then remove them from the data set. 
+Given this information, we can now filter out the variables whose percentage of NAs is greater than 60%.
+
+
+### 4.a.2) Create a function to identify the predictor variables (column numbers) that have 50% or more NAs and remove them from the data set. 
 
 ```{r}
 # create a function to determine which variables have
@@ -125,7 +160,8 @@ result <<- (colnames(LCTF10[bad]))
 assess_bad_data(LCTF10)
 ```
 
-Now check the function results
+
+ Below I check the function outputs and then remove the predictor variables from the data set based on column number.
 
 ```{r}
 #how many bad columns are there?
@@ -135,20 +171,82 @@ length(result)
 bad
 
 #what are the proprtions of legitimate data per bad column?
-d[result]
-
-#what does a missmap on the bad columns look like?
-missmap(LCTF10[result])
+#d[result]
 
 # toss the bad variables from td.
 LCTF10 <- LCTF10[-(bad)]
-
-#check your data now and save it
-#missmap(LCTF10)
-#glimpse(LCTF10)
-
-#saveRDS(object = LCTF10, file = "v2data.rds")
 ```
+
+
+Using the missmap function from Amelia gives a global view of the missing values across all variables in a colored grid pattern.
+
+```{r}
+# a visual approach to the number of NAs.
+missmap(LCTF10)
+```
+
+
+## 4.b) Identify "repeat" variables
+
+Repeat variables are variables that contain the same data, stored in different data types. Generally, it is advisable to keep quantified versions of duplicated variables and remove the character or string version, as the model will have to deal with many different combinations of levels, bogging the model and machine donwn.
+
+For duplicates where the variables are floating and integer, the value kept depends on the nature of the variable. In this particular data set, floating variables will most likely represent financial (money) data; either choice can be accepted, however it may be easier to work with the integer values.
+
+To identify duplicates requires observing the LCTF10 data frame manually, searching for columns containing near similar values, and to search the kaggle Lending Club cookbook for variable definitions.
+
+Some variables are nearly identical except for an added "_int" or "_inv". "_int" stands for interest, and "_inv" stands for "investment" or "invested" usually in repsonse to an outside lender's investment.
+
+
+```{r}
+# pull out the predictor variable names.
+b<- colnames(LCTF10)
+
+# detect which columns contain the key phrases.
+which(str_detect(b, pattern="_inv"))
+which(str_detect(b, pattern = "_int"))
+
+b[c(3,37,39,41)]
+```
+
+as we can see there are four variables that contain our key words. A search for these columns shows:
+
+```{r}
+head(LCTF10$funded_amnt)
+head(LCTF10$funded_amnt_inv)
+
+head(LCTF10$out_prncp_inv)
+head(LCTF10$out_prncp)
+
+head(LCTF10$total_pymnt_inv)
+head(LCTF10$total_pymnt)
+
+```
+
+
+a search f
+
+
+### 4.d) Take a look at proportions of factor variables. 
+
+Now calculate the proportions of your levels within each categorical variable:
+```{r}
+LCTF10 %>%
+  select_if(is.factor) %>%
+  sapply(function(x) summary(x)/length(x))
+```
+
+
+
+
+
+### 4.f) Remove loan_status.
+
+```{r}
+which(colnames(LCTF10)=="loan_status")
+LCTF10<-LCTF10[,-16]
+```
+
+
 
 
 ## **Step 4: Removing excess columns**
@@ -165,7 +263,7 @@ Here I remove columns that have either:
   e) too little variability for num/int or categorical
 
 
-### 4.a) Remove loan_status.
+### 4.f) Remove loan_status.
 
 ```{r}
 which(colnames(LCTF10)=="loan_status")

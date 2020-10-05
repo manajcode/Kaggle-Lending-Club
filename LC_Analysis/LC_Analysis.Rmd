@@ -102,7 +102,7 @@ Here I apply a process to remove columns that provide no information in the abil
 
     a. Evaluate the variables that have almost no ability to classify based on the percentage of NA values 
   
-    b. Identify "repeat" variables, variablese that contain the same dat of anothert column but in a different type (e.g. 1 vs "one")
+    b. Identify "repeat" variables, variablese that contain the same data of another column but in a different type (e.g. 1 vs "one")
     
     c. Identify variables that have too may classes or distinct values for a variable of type categorical or character; that is to say, too much variability for character or categorical varibles.
   
@@ -187,12 +187,88 @@ missmap(LCTF10)
 
 
 ## 4.b) Identify "repeat" variables
-
+NOTE: SECTION UNDER CONSTRUCTION....
 Repeat variables are variables that contain the same data, stored in different data types. Generally, it is advisable to keep quantified versions of duplicated variables and remove the character or string version, as the model will have to deal with many different combinations of levels, bogging the model and machine donwn.
 
 For duplicates where the variables are floating and integer, the value kept depends on the nature of the variable. In this particular data set, floating variables will most likely represent financial (money) data; either choice can be accepted, however it may be easier to work with the integer values.
 
-To identify duplicates requires observing the LCTF10 data frame manually, searching for columns containing near similar values, and to search the kaggle Lending Club cookbook for variable definitions.
+To identify duplicates requires observing the kaggle Lending Club cookbook for variable definitions to find variables with similarl meanings.
+
+
+
+
+
+### 4.c) Identify and remove factor variables with too many levels or cahracter variables with too many distinct values.
+
+Having too many levels in a factor can lead to overfitting, and become taxing for the model and your local machine's RAM and processor. Thus I will exclude predictor variables that contain over 6 levels. 
+
+I first identify the columns that are of type factorand count the number of levels of each predictor variable.
+
+```{r}
+LCTF10 %>%
+  select_if(is.factor) %>%
+  #sapply(function(x) summary(x)/length(x))
+  sapply(function(x) length(levels(x)))
+```
+
+I then keep only the variables with less than 7 levels. Notice that in this step I remove the original, unmodified predictor Loan_status, saving us a step later on.
+
+```{r}
+v<- LCTF10 %>%
+  select_if(is.factor) %>%
+  sapply(function(x) length(levels(x)))
+
+q <- names(v[which(v>10)])
+  
+LCTF10 <- LCTF10 %>%
+  select(-q)
+```
+
+
+
+### 4.d) Identify the variables that contain numeric or integer data but have too little variability.
+
+First I identify the variables that are numeric, and then check the status of nas within them; calculating variance on columns with NAs will only return NA.
+```{r}
+# variance of numeric variables
+LCTF10 %>%
+  select_if(is.numeric) %>%
+  select(any())
+
+  sapply(function(x) var(x)) %>%
+```
+
+   
+Here I analyze the variables of type integer; there is only one and it is a variable containing year.
+```{r}
+LCTF10 %>%
+  select_if(is.integer)
+  sapply(function(x) var(x))
+```
+
+
+
+### 4.e) Variables that have data that cannot be analyzed.
+
+
+
+### 4.f) Remove loan_status.
+
+```{r}
+which(colnames(LCTF10)=="loan_status")
+LCTF10<-LCTF10[,-16]
+```
+
+
+
+
+
+
+
+
+
+#~~~~~~~~~~~~~~~excess-not needed~~~~~~~~~~~~~~~~~~~
+```{r}
 
 Some variables are nearly identical except for an added "_int" or "_inv". "_int" stands for interest, and "_inv" stands for "investment" or "invested" usually in repsonse to an outside lender's investment.
 
@@ -225,29 +301,22 @@ head(LCTF10$total_pymnt)
 
 a search f
 
-
-### 4.d) Take a look at proportions of factor variables. 
-
-Now calculate the proportions of your levels within each categorical variable:
-```{r}
-LCTF10 %>%
-  select_if(is.factor) %>%
-  sapply(function(x) summary(x)/length(x))
 ```
 
 
 
 
 
-### 4.f) Remove loan_status.
-
-```{r}
-which(colnames(LCTF10)=="loan_status")
-LCTF10<-LCTF10[,-16]
-```
 
 
 
+
+
+
+
+
+
+#~~~~~~~~~~~~~old code below~~~~~~~~~~~~~
 
 ## **Step 4: Removing excess columns**
 
@@ -269,6 +338,14 @@ Here I remove columns that have either:
 which(colnames(LCTF10)=="loan_status")
 LCTF10<-LCTF10[,-16]
 ```
+
+
+
+
+
+
+
+
 
 
 ### 4.b) Check out the ratio of NAS in the remaining factorial and numeric data.

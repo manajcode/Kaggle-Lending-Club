@@ -187,15 +187,30 @@ missmap(LCTF10)
 
 
 ## 4.b) Identify "repeat" variables
-NOTE: SECTION UNDER CONSTRUCTION....
-Repeat variables are variables that contain the same data, stored in different data types. Generally, it is advisable to keep quantified versions of duplicated variables and remove the character or string version, as the model will have to deal with many different combinations of levels, bogging the model and machine donwn.
 
-For duplicates where the variables are floating and integer, the value kept depends on the nature of the variable. In this particular data set, floating variables will most likely represent financial (money) data; either choice can be accepted, however it may be easier to work with the integer values.
+Repeat variables are variables that contain the same data, stored in different data types. Generally, it is advisable to keep quantified versions of duplicated variables and remove the character or string version, as the model will have to deal with many different combinations of levels, bogging the model and machine donwn.
 
 To identify duplicates requires observing the kaggle Lending Club cookbook for variable definitions to find variables with similarl meanings.
 
+A review of the varaibles within the data indicate several extremely similarly named predictors whose values are exact or similar to their counterparts:
+
+    1.loan_amnt-The listed amount of the loan applied for by the borrower. If at some point in time, the credit department reduces the loan amount, then it will be reflected in this value.
+    2.funded_amnt-The total amount committed to that loan at that point in time
+    3.funded_amnt_inv-The total amount committed by investors for that loan at that point in time.
+    4.total_pymnt-Payments received to date for total amount funded
+    5.total_pymnt_inv-Payments received to date for portion of total amount funded by investors
 
 
+variables ending containing "inv_" and "int_" signify  investor and interest; these variables can be kept but 
+    
+I'll keep the following variables:
+funded_amnt
+total_pymnt
+
+```{r}
+LCTF10 <- LCTF10 %>%
+  select(-c(funded_amnt, funded_amnt_inv,total_pymnt_inv))
+```
 
 
 ### 4.c) Identify and remove factor variables with too many levels or cahracter variables with too many distinct values.
@@ -211,14 +226,14 @@ LCTF10 %>%
   sapply(function(x) length(levels(x)))
 ```
 
-I then keep only the variables with less than 7 levels. Notice that in this step I remove the original, unmodified predictor Loan_status, saving us a step later on.
+I then keep only the variables with 5 or less levels. Notice that in this step I remove the original, unmodified predictor Loan_status, saving us a step later on.
 
 ```{r}
 v<- LCTF10 %>%
   select_if(is.factor) %>%
   sapply(function(x) length(levels(x)))
 
-q <- names(v[which(v>10)])
+q <- names(v[which(v>6)])
   
 LCTF10 <- LCTF10 %>%
   select(-q)
@@ -228,14 +243,17 @@ LCTF10 <- LCTF10 %>%
 
 ### 4.d) Identify the variables that contain numeric or integer data but have too little variability.
 
+IN CONSTRUCTION...
+
 First I identify the variables that are numeric, and then check the status of nas within them; calculating variance on columns with NAs will only return NA.
+
+Notice that some predictors have very small values, 
+
 ```{r}
 # variance of numeric variables
 LCTF10 %>%
   select_if(is.numeric) %>%
-  select(any())
-
-  sapply(function(x) var(x)) %>%
+  sapply(function(x) var(x)) 
 ```
 
    

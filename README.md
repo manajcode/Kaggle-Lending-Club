@@ -14,13 +14,3 @@ The outcome of the code is the rds file "cleaneddata.rds", which is available to
 ## LC Data Analysis
 This sub-project contains the code and files needed to perform the classification analysis.
 
-## Variable Selection Procedures
-A sub-project that tests various automated variable selection packages for model development on the lending club data. The packages tested are:
-        
-        1. Boruta, written by Miron Bartosz Kursa 
-        
-        2. Vtreat, written by John Mount and Nina Zumel
-
-        3. Vsurf, written by Robin Genuer,Jean-Michel Poggi, and Christine Tuleau-Malot 
-
-        4. stats package (specifically prcomp function) for principal component analysis, written by the R core development team

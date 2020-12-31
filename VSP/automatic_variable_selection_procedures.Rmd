@@ -1,6 +1,0 @@
----
-title: "an analysis of variable selection procedures"
-author: "Michael Najarro"
-date: "9/27/2020"
-output: html_document
----

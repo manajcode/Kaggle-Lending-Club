@@ -7,7 +7,15 @@ output: pdf_document
 
 ```{r, echo = FALSE, message =FALSE}
 library(pacman)
-p_load(tidyverse, tinytex, Amelia, knitr, DataExplorer, imputeMissings, corrplot, magrittr)
+p_load(tidyverse,
+       tinytex,
+       Amelia,
+       knitr,
+       DataExplorer, 
+       corrplot,
+       magrittr,
+       tictoc,
+       beepr)
 ```
 
 # *Objective*
@@ -42,7 +50,7 @@ kable(vari, format = "html", caption = "fig 1. variables names of lending club d
 ### 1.c) Make a table of the number of rows and columns in the dataframe.
 
 ```{r}
-dimen <- data.frame(cbind(rows = c(152), columns = c(42381)))
+dimen <- data.frame(cbind(rows = nrow(LCTF10), columns = ncol(LCTF10)))
 
 kable(dimen, format = "html", caption = "fig 2. dimensions of the lending club data", align = 'l')
 ```
@@ -65,7 +73,7 @@ There are several important features of the data:
  
     1. Time is measured by several variables; issue_date and last_credit_pull_date. For this analysis I will consider issue_date as the measure of time to subset the data for the years of 2012 to 2014.
 
-    2. The response variable is loan status.
+    2. The response variable is borrower status.
   
     3. There 152 predictor variables. Of these, over half of the variables are continuous data types.
     
@@ -106,15 +114,15 @@ Here I apply a process to remove columns that provide no information in the abil
     
     c. Identify variables that have too may classes or distinct values for a variable of type categorical or character; that is to say, too much variability for character or categorical varibles.
   
-    d. Identify the variables that contain numeric or integer data but have too little variability.
+    d. Variables that have data that cannot be analyzed (e.g. columns with notes, aka "empty values")
 
-    e. Variables that have data that cannot be analyzed (e.g. columns with notes, aka "empty values")
-
-    f. remove "loan status", the original response variable that was transformed into a binary classifier.
+    e. remove "loan status", the original response variable that was transformed into a binary classifier.
     
-    g. remove any date columns within the data set; not helpful, similar to c.
+    f. remove any date columns within the data set; not helpful, similar to c.
     
-    h. Identify the variables that contain a high degree of correlation with 1 or more other variables.
+    g. Identify the variables that contain a high degree of correlation with 1 or more other variables.
+    
+    h. Identify the variables that contain numeric or integer data but have too little variability.
 
 
 ### 4.a.1) Evaluate the percent of NAs in the predictor variables.
@@ -186,7 +194,7 @@ missmap(LCTF10)
 ```
 
 
-## 4.b) Identify "repeat" variables
+### 4.b) Identify "repeat" variables
 
 Repeat variables are variables that contain the same data, stored in different data types. Generally, it is advisable to keep quantified versions of duplicated variables and remove the character or string version, as the model will have to deal with many different combinations of levels, bogging the model and machine donwn.
 
@@ -217,7 +225,7 @@ LCTF10 <- LCTF10 %>%
 
 Having too many levels in a factor can lead to overfitting, and become taxing for the model and your local machine's RAM and processor. Thus I will exclude predictor variables that contain over 6 levels. 
 
-I first identify the columns that are of type factorand count the number of levels of each predictor variable.
+I first identify the columns that are of type factor and count the number of levels of each predictor variable.
 
 ```{r}
 LCTF10 %>%
@@ -233,416 +241,172 @@ v<- LCTF10 %>%
   select_if(is.factor) %>%
   sapply(function(x) length(levels(x)))
 
-q <- names(v[which(v>6)])
-  
+q<- keep(v, function(x) x>5)
+s<- names(q)
+s
 LCTF10 <- LCTF10 %>%
-  select(-q)
+  select(-all_of(s))
 ```
 
 
+### 4.d) Variables that have data that cannot be analyzed.
 
-### 4.d) Identify the variables that contain numeric or integer data but have too little variability.
+These predictors contain observational notes collected from bank employees. These columns were removed in step 4.c. 
 
-IN CONSTRUCTION...
 
-First I identify the variables that are numeric, and then check the status of nas within them; calculating variance on columns with NAs will only return NA.
+### 4.e) Remove loan_status.
 
-Notice that some predictors have very small values, 
+Note that this variable was already removed in step 4.c
 
-```{r}
-# variance of numeric variables
-LCTF10 %>%
-  select_if(is.numeric) %>%
-  sapply(function(x) var(x)) 
-```
-
-   
-Here I analyze the variables of type integer; there is only one and it is a variable containing year.
-```{r}
-LCTF10 %>%
-  select_if(is.integer)
-  sapply(function(x) var(x))
+```{r echo=FALSE, eval=FALSE}
+#which(colnames(LCTF10)=="loan_status")
+#LCTF10<-LCTF10[,-16]
 ```
 
 
+### 4.f) Remove any date columns within the data set.
 
-### 4.e) Variables that have data that cannot be analyzed.
+date columns, irrepsective of their type, produce excess complexity that produces no beneift to the analysis. Note that most of the date predictors were removed in step 4.c.
 
-
-
-### 4.f) Remove loan_status.
+thus I only remove predictor variable Issue_month.
 
 ```{r}
-which(colnames(LCTF10)=="loan_status")
-LCTF10<-LCTF10[,-16]
+LCTF10 <- LCTF10 %>%
+  select(-c(Issue_Month))
 ```
 
+    
+### 4.g) Identify the variables that contain a high degree of correlation with 1 or more other variables.
 
-
-
-
-
-
-
-
-#~~~~~~~~~~~~~~~excess-not needed~~~~~~~~~~~~~~~~~~~
-```{r}
-
-Some variables are nearly identical except for an added "_int" or "_inv". "_int" stands for interest, and "_inv" stands for "investment" or "invested" usually in repsonse to an outside lender's investment.
-
+In order to perform the correlation matrix, I need to first address the issue of missing data, or NAs within the data frame. a missing map indicates a relatively small percent of indivuals have missing data for only a few predictors.
 
 ```{r}
-# pull out the predictor variable names.
-b<- colnames(LCTF10)
-
-# detect which columns contain the key phrases.
-which(str_detect(b, pattern="_inv"))
-which(str_detect(b, pattern = "_int"))
-
-b[c(3,37,39,41)]
-```
-
-as we can see there are four variables that contain our key words. A search for these columns shows:
-
-```{r}
-head(LCTF10$funded_amnt)
-head(LCTF10$funded_amnt_inv)
-
-head(LCTF10$out_prncp_inv)
-head(LCTF10$out_prncp)
-
-head(LCTF10$total_pymnt_inv)
-head(LCTF10$total_pymnt)
-
-```
-
-
-a search f
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#~~~~~~~~~~~~~old code below~~~~~~~~~~~~~
-
-## **Step 4: Removing excess columns**
-
-Here I remove columns that have either:
-  a) no ability to apply classification 
-  
-  b) a character column that has an integer/numeric version of itself
-  
-  c) lots of empty values (not NAs but not data either)
-  
-  d) too much variability for a categorical/char. column
-  
-  e) too little variability for num/int or categorical
-
-
-### 4.f) Remove loan_status.
-
-```{r}
-which(colnames(LCTF10)=="loan_status")
-LCTF10<-LCTF10[,-16]
-```
-
-
-
-
-
-
-
-
-
-
-### 4.b) Check out the ratio of NAS in the remaining factorial and numeric data.
- 
-No legitamite NAs for factors (not true) but ~ 20% NAs in numeric data. 
-```{r}
-# check out the NA counts on your categorical and numeric variables:
-LCTF10 %>%
-  select_if(is.factor) %>%
-  sapply(function(x) table(is.na(x)))
-
-LCTF10 %>%
-  select_if(is.numeric) %>%
-  sapply(function(x) table(is.na(x)))
-```
-
-
-~noticably low variances:~
-Issue_Year -- ok to keep
-delinq_2yrs -- ok to keep
-inq_last_6mths -- ok to keep
-pub_rec -- ok to keep--??
-revol_util -- impute the mean
-collections_12_mths_ex_med - ok to keep
-tot_coll_amt --impute the mean
-tot_cur_bal  -- impute the mean
-total_rev_hi_lim  --impute the mean
-acc_open_past_24mths --impute the mean
-avg_cur_bal --impute the mean
-bc_open_to_buy --impute the mean
-bc_util -- impute the mean
-chargeoff_within_12_mths--toss, no var. 
-
-contain NAs:
-mo_sin_old_il_acct --impute mean
-mo_sin_old_rev_tl_op --impute mean
-mo_sin_rcnt_rev_tl_op --impute mean
-mo_sin_rcnt_tl -- impute mean
-mort_acc -- impute mean
-mths_since_recent_bc --impute mean
-mths_since_recent_inq -- impute mean
-num_accts_ever_120_pd -- impute mean
-num_tl_30dpd --toss; high nas + low variance
-.
-.through
-.
-percent_bc_gt_75 --for all var in between _ ends, impute mean.
-
-pub_rec_bankruptcies --low var, toss
-tax_liens --low var, toss
-tot_hi_cred_lim -- impute mean
-total_bal_ex_mort -- impute mean
-total_bc_limit -- impute mean
-total_il_high_credit_limit -- impute mean
-
-
-### 4.c) Now calculate the variance per numeric column to see what is going on within the continuous variables.
-
-```{r}
-# variance of numeric variables
-LCTF10 %>%
-  select_if(is.numeric) %>%
-  sapply(function(x) var(x))
-```
-
-
-### 4.d) Take a look at proportions of factor variables. 
-
-Now calculate the proportions of your levels within each categorical variable:
-```{r}
-LCTF10 %>%
-  select_if(is.factor) %>%
-  sapply(function(x) summary(x)/length(x))
-```
-
-
-### 4.e) Based on the information provided in 7.b)- 7.d) toss all bad variables.
-```{r}
-names(LCTF10)
-
-LCTF10 <- LCTF10[,-c(2,3,8,9,14,16:18,21,22,44,46,47,51, 52,53,54,62,63,82,93:106)]
-```
-
-~keep:
-total_rec_late_fee); too little var.?
-recoveries..highly skewed low var.
-collection_recovery_fee...
-collections_12_mo_ex_med
-
-toss:
-funded_amnt--duplicate as loan-amount
-funded_amnt_inv--duplicate as loan amount
-subgrade-not needed.
-emp_title; too many title
-issue_month; not needed
-url; not applicable
-pymnt plan
-desc; notes
-zip_code; not a complete number
-addr_state too many levels
-delinq_amnt--low var.
-acc_now_delinq--toss super lower variance.
-last_paymnt_d -- toss; will confuse model with another year
-next_pymnt_d -- toss; will confuse model with another year
-last_credit_pull_d toss; will confuse model with another year
-policy_code -- toss; too uniform
-application_type -- toss
-verification_status_joint --toss
-sec_app_earliest_cr_line -- toss
-toss all hardship columns -- toss
-payment_plan_start_date -- toss
-all hardship_loan_status -- toss
-disbursement_method -- toss
-debt_settlemet_flag -- toss
-debt_settlemet_flag_date -- toss
-settlement_status -- toss
-settlemetn_date -- toss
-
-
-### 4.f) Toss more variables.
-
-toss:
-earliest_crline
-out_prncp; 98% 0s highly skewed data
-put_prncp_inv; 98% 0s highly skewed da ta
-total_payments_inv; nearly identical to total_paymnt
-
-
-```{r}
-#names(LCTF10)
-LCTF10 <- LCTF10[,-c(15,25,26,28)]
-saveRDS(object = LCTF10, file = "v2data.rds")
-
-#evaluate the data cleaning so far with data explorer.
-create_report(LCTF10, y = "borrower_status", output_file = "LCTF_pre-imputation_and_cleaning.html")
-
 missmap(LCTF10)
 ```
 
-### 4.f) Remove NAs, remove em_length, perform a correlation matrix on numeric variables and toss highly correlated variables.
-
-Because there are not very many rows with NAs, it is ok to simply omit them at this point. EMP length is being removed because the number of levels are quite high.
-
-highly correlated variables (+ or minus ~50% or more) are:
-
-total_paymnt & loan_amnt
-loan_amnt & installment
-total_paymnt & installment
-int_rate & fico_range_low
-int_rate & fico_range_high
-fico_range_high & fico_range_low and vice versa
-revol_util & fico_range_low
-revol_util & fico_range_high
-loan_amnt & total_paymnt
-loan_amnt & total_rec_prncp
-loan amnt & total_rec_ int
-installment & total_rec_int
-installment and total_rec_prncp
-installment & total_paymnt
-total_pymnt & total_rec_prncp
-total__pymnt & total rec int
-annual_inc & tot_cur_bal
-revol_bal & total_rev_hi_lim
-fico_range low & bc_open_to_buy & bc_util
-fico_range_high & " & "
-revol_util " & "
-open_acc & num_actv_rev_tl & num_bc_stats
-total_acc & num_bc_tl
-open_acc & num_op_rev_tl & num_rev_accts & num_rev_tl_bal_gt_0 &num_sats
-pub_rec & pub_rec_bankruptcies
-revol_util & percent_bc_gt_75
-
-toss:
-fico range hi and low
-open_acc
-total_payment
-installment
-total rec prncp
-
+A reasonable approach would be to impute values. Here I take a conservative approach and remove records that contain an NA.
 
 ```{r}
-# get rid of EMP length
-LCTF10 <- LCTF10[,-6]
-
-# get rid of NAs
 LCTF10 <- na.omit(LCTF10)
+```
 
-# cor matrix; used this to investigate
-#LCTF10 %>%
-#  select_if(is.numeric) %>%
-# cor()
 
+Below I create a correlation matrix of all numeric variables and Identify which predictor variables that have the greatest number of unique intertactions, when the pearson's correlation value is greater than 0.5. AS we can see columns 3,11,15,18,19,20,31,47,48,49,50,52,53,64,55, and 64 have the highest number of correlations with other variables.
+
+```{r}
 # correlation matrix
 a<- LCTF10 %>%
   select_if(is.numeric)
+
 corrplot(cor(a), method = "color")
 
-#toss
-#names(LCTF10)
-LCTF10 <- LCTF10[,-c(4,14,15,17,23,24)]
+b<- as.matrix(cor(a))
+which(b > 0.5, arr.ind = TRUE)
+```
+
+A reveiew of the actual correlation measures indicate very high correlation for most.
+
+```{r}
+which(b > 0.5,arr.ind = TRUE)
+hc<-which(b > 0.5) 
+b[hc]
 ```
 
 
-### 4.g) Toss variables with very uneven spreads of data across values, then apply ridge lasso to keep the best variables.
+I further analyzed the correlation in the inverse relationship but found very few predictor variables containing extreme correlations. I left these variables alone. 
 
-A final removal of unevenly spread variables:
-
-inq last 6 months
-pub rec
-recoveries
-collections_12_ths_ex_med
-tot_coll_amt
-num_accts_ever_120_pd
-num_tl_120dpd_2m
-num_tl_90g_dpd_24m
-percent_bc_gt_75
-pub_rec_bankruptcies
-tax_liens
-
-```{r}
-sapply(a, function(x) (table(x)))
-#names(LCTF10)
-LCTF10 <- LCTF10[,-c(13,14,21,26,27,41,51,52,55,56,57)]
-
-#toss remaining excessive factor variables
-LCTF10 <- LCTF10[,-c(10,9,7,4)]
-saveRDS(object=LCTF10, file = "v3data.rds")
+```{r echo=FALSE}
+which(b < -0.5, arr.ind = TRUE)
+lc<-which(b < -0.5) 
+b[lc]
 ```
 
 
-## **Step 5: Apply Lasso to determine if any other columns can be removed**
-
-### 2.O) Apply Lasso to see if you can remove any more variables.
-
-Application of LASSO suggests to use all numeric values.
+Now I remove the aforementioned "columns" or predictor variables from LCTF10 that have high correlations. Note that I excluded variable loan_amnt as that column represents the amount of money that was lent and is important for analysis.
 
 ```{r}
-library(glmnet)
+highcor<-colnames(b[,c(3,11,15,18,19,20,31,47,48,49,50,52,53,64,55,64)])
 
-a<- LCTF10 %>%
-  select_if(is.numeric)
-
-# 1 = safe, 0 = risk
-a$borrower_status <- as.numeric(as.factor(LCTF10$borrower_status)) - 1
-x <- model.matrix(borrower_status~., data = a)[,-43]
-y <- a$borrower_status
-
-lasso_mod <- glmnet(x, y, alpha = 0)
-
-set.seed(1443)
-lasso_cvfit <- cv.glmnet(x, y, alpha=0)
-lasso_cvfit$lambda.min # selected labda value
-
-#plot with alpha threshold
-plot(lasso_mod, xvar = "lambda")
-abline(v=log(lasso_cvfit$lambda.min))
-
- 
-coef(lasso_cvfit, s="lambda.min")
-lasso_coefs <- as.numeric(coef(lasso_cvfit, s="lambda.min"))
-sum(abs(lasso_coefs) > 0)
+LCTF10 <- LCTF10 %>%
+  select(-all_of(highcor))
 ```
 
 
-## *Step 6: Training a model on the data*
 
-Before beginning any machine learning algorithm, the response variable needs to be adjusted:
+### 4.h) Identify the variables that contain numeric or integer data but have too little variability.
+
+Because I remvoed the NAs previosuly, I look for variables who have zero variance. 
 
 ```{r}
-# free up the environment first.
-rm(a,lasso_coefs, lasso_cvfit, x, y, lasso_mod)
+#clear your environ
+rm(bad,d,q,result,s,v,assess_bad_data,a,b,hc,highcor,lc)
 
+# variance of numeric variables
+rr<-LCTF10 %>%
+  select_if(is.numeric) %>%
+  sapply(function(x) var(x))
+
+LCTF10 <- LCTF10 %>%
+  select(-names(which(rr == 0)))
+```
+
+
+Selecting out variables close to zero may conflate low variability with a reasonable distribution of data, given the particular measurement. Thus for the reamaining numeic variables I evaluate the distributions and toss variables that have highly skewed distributions.
+
+```{r}
+#LCTF10 %>%
+#  keep(is.numeric) %>%
+#  gather() %>%
+#  ggplot(aes(value)) +
+#    facet_wrap(~ key, scales = "free") +
+#    geom_density()
+
+#pull out the names of the numeric columns
+w<-LCTF10 %>%
+select_if(is.numeric) %>%
+  names()
+
+#create a df of numeric colums
+k<- LCTF10 %>%
+select_if(is.numeric)
+
+#identify the histograms with extreme dsitributions
+#10,11-13-16,21-24,27,29,30
+sapply(k[1:30], FUN=hist)
+
+#41-43,48-50
+sapply(k[31:51], FUN=hist)
+
+#pull out the histogram names of low diversity
+ww<- w[c(10,11,13,14,15,16,21,22,23,24,27,29,30,41,42,43,48,49,50)]
+
+LCTF10 <-LCTF10 %>%
+  #select(-c(ww))
+  select(-all_of(ww))
+
+rm(k,rr,w,ww,vari,percentnas,dimen)
+```
+
+
+
+##**Phase 5: Generate Model on training Data**
+
+The goal of this machine learning model is to classify a borrower on their ability to pay back their loan in a supervised machine learning model, given all of the predictor variables and the response variable of two classes: "risky" and "safe" clients.
+
+### 5.a) clean up the predictor variable
+
+Before beginning any machine learning algorithm, the response variable needs to be converted from character to a factor type variable.
+
+```{r}
 # convert the response to a factor
 LCTF10$borrower_status <- as.factor(LCTF10$borrower_status)
 
 # create a new vector that avoids the space in the response variable's levels
-library(car)
-possible_default <-   as.factor(recode(as.vector(LCTF10$borrower_status), "'risky client'='risk'; 'safe client'='safe'"))
+#library(car)
+p_load(car, randomForest, caret, e1071)
+possible_default <- as.factor(recode(as.vector(LCTF10$borrower_status), "'risky client'='risk'; 'safe client'='safe'"))
 
+#check to make sure the newest predictor matches previous 
 str(possible_default)
 table(possible_default)
 table(LCTF10$borrower_status)
@@ -653,22 +417,20 @@ LCTF10 <- LCTF10 %>%
 
 table(LCTF10$borrower_status)
 table(LCTF10$chance_default)
-str(LCTF10$chance_default)
 
 # now drop the borrower status
 LCTF10 <- LCTF10 %>%
   select(-borrower_status)
 
-LCTF10<-readRDS(file="v4data.rds")
+saveRDS(object = LCTF10, file = "data_for_rf.rds")
 ```
 
 
-## 6.a) I can now create a test and training data set for model development.
+### 5.b) I can now create a test and training data set for model development.
+
+I create the test and training data using a 25:75 percent split on the data.
 
 ```{r}
-
-LCTF10 <- readRDS(file = "v4data.rds")
-
 # create the test data
 n <- nrow(LCTF10)
 
@@ -683,63 +445,71 @@ nrow(train_set)
 ```
 
 
-## 6.b) Here I will create a random forest model on the training data using the random forest package.
+### 5.c) Here I will create a random forest model on the training data using the random forest package.
 
 ```{r}
-p_load(tidyverse, randomForest, caret, e1071)
+rm(rf,possible_default)
 
 set.seed(2221)
+tic()
 rf = randomForest(chance_default~., data = train_set)
+toc()
+
 print(rf) 
 
 attributes(rf)
 rf$err.rate
-rf$confusion
 
 plot(rf) # by about 325 trees should be stable; tune mtry.
 ```
 
 
-## *Step 7: evaluate model performance*
+##**Phase 6: Run and Evaluate Model on Test Data**
 
-### 7.a) Evaluate how the model does on the test data set for classification via a confusion matrix.
+### 6.a) Run and evaluate how the model does on the test data.
 
 ```{r}
+tic()
 p2 <- predict(rf, test_set)
+toc()
 
 confusionMatrix(p2, test_set$chance_default)
 ```
 
 
-## *Step 8: Improving the model performance*
+##*Phase 7: Improve Model Performance**
 
-### 8.a) Now tune the random forest
+### 7.a) Now tune the random forest
 
 ```{r}
 set.seed(9006)
+tic()
 m <- caret::train(y = train_set$chance_default,
                   x = train_set[,colnames(train_set) != 'chance_default'],
                   trControl = trainControl(method="oob"),
                   method = "rf")
+toc()
 m
 ```
 
 
-### 8.b) Revise the random forest model with new info.
+### 7.b) Revise the random forest model with new info.
 
-mtry should be 46. remove unessary items from environment prior to model creation.
+Here I create a new random forest model with a new mtry set at 23. 
 
 ```{r}
 #remove old model and LCTF10
-rm(rf, LCTF10)
+#rm(rf, LCTF10)
 
-rf2 = randomForest(chance_default~., data = train_set, ntree = 325, mtry = 46)
+tic()
+rf2 = randomForest(chance_default~., data = train_set, ntree = 325, mtry = 23)
+toc()
 
 rf2 
 ```
 
 
-### 8.c) Evaluate new model's performance on the test data.
+### 7.c) Evaluate new model's performance on the test data.
 
 ```{r}
 p2 <- predict(rf2, test_set)
@@ -748,7 +518,7 @@ confusionMatrix(p2, test_set$chance_default)
 ```
 
 
-### 8.d) Get info on average trees of rf2 model.
+### 7.d) Get info on average trees of rf2 model.
 
 ```{r}
 # typical number of levels in a tree.
@@ -758,3 +528,117 @@ hist(treesize(rf2), main = "number of nodes for the trees", col = "green")
 varImpPlot(rf2)
 ```
 
+
+
+
+*Alternative random forest analysis using Ranger*
+
+This section is an alternative approach to implementing the Random Forest classfication algorithm using a more modern implementation of the Random Forest called Ranger.
+
+## **Phase:1 clean the environment and load in your refined data**
+
+```{r}
+#clean environment
+rm(list=ls())
+gc()
+
+# load back your data
+refineddf <- readRDS(file = "./data_for_rf.rds" )
+```
+
+
+## **Phase 2: create test adn training data**
+
+### 2.a) split your data into training and test sets
+
+```{r}
+# create the test data
+n <- nrow(refineddf)
+
+# create the test data
+test <- sample.int(n, size = round(0.25 * n))
+test_set <- refineddf[test, ]
+nrow(test_set)
+
+#create the training data
+train_set <- refineddf[-test,]
+nrow(train_set)
+```
+
+
+## **Phase 3: Grow the Random Forest model on the Training data**
+
+### 3.a) Build the model on training data 
+
+```{r}
+library(ranger)
+
+tic()
+rf1 <- ranger(chance_default ~ .,
+              data = train_set,
+              num.trees = 100,
+              mtry = 5,
+              write.forest = TRUE,
+              importance="impurity",
+              min.node.size = 1,
+              max.depth = 0,
+              splitrule= "gini",
+              num.threads = 2,
+              classification=TRUE,
+              seed = 2020,
+              regularization.factor = 1
+              )
+toc()
+beep(sound=2)
+```
+
+
+## **Phase 4: test the predicted values from training model onto the test data**
+
+### 4.a) Check our the model first
+
+```{r}
+print(rf1)
+
+head(predictions(rf1))
+```
+
+
+### 4.b) Compare the model's predicted values relative to the test data
+
+```{r}
+pred_val <- predict(rf1, data = test_set)
+
+#pivot table of classification results
+table(test_set$chance_default, pred_val$predictions)
+
+# percent classifications
+prop.table(table(test_set$chance_default, pred_val$predictions))
+
+#generate a binary classifier for whether the probability
+# of predictions is greater than 50%
+#stored_prepared <- c(rep(0, length(test_set$chance_default)))
+#stored_prepared[pred_val > 0.5] <- "1"
+
+
+# confusion matrix results
+confusion_matrix <- function(stored_pred, ys){
+  tb <- table(stored_pred, ys)
+  print(addmargins(tb))
+  accuracy <- (tb[1,1] + tb[2,2])/sum(tb)
+  sensitivity <- tb[2,2]/sum(tb[,2])
+  specificity <- tb[1,1]/sum(tb[,1])
+  
+  print(paste("accuracy=",round(accuracy, digits =4)))
+  print(paste("sensitivity=",round(sensitivity, digits = 4)))
+  print(paste("specificity=",round(specificity, digits = 4)))
+}
+
+confusion_matrix(stored_pred = pred_val$predictions,
+                 ys = test_set$chance_default)
+```
+
+
+
+## **Phase 5: tune your model with Caret
+**

@@ -127,7 +127,7 @@ Here I apply a process to remove columns that provide no information in the abil
 
 ### 4.a.1) Evaluate the percent of NAs in the predictor variables.
 
-To begin, I identify the percent frequency of NAs per each predictor variable, and specifically present the variables whose percentage of NAs is greater than 60%. In general a variable whose missing more than half of its data cannot be used to predict an outcome, as the probability of selecting a values is by default already below 50%. I select a slightly higher percentage than 50% to select variables that can provide better information and power in their ability to classify outcomes. 
+To begin, I identify the percent frequency of NAs per each predictor variable, and specifically present the variables whose percentage of NAs is greater than 50%. In general a variable whose missing more than half of its data cannot be used to predict an outcome, as the selection is a guess at best.
 
 
 ```{r}
@@ -147,7 +147,7 @@ kable(percentnas, caption = "Predictors with  high proportions of NAs", align = 
 
 There were 43 predictor variables whose percentage of NAs was greater than 50%.
 
-Given this information, we can now filter out the variables whose percentage of NAs is greater than 60%.
+Given this information, we can now filter out the variables whose percentage of NAs is greater than 50%.
 
 
 ### 4.a.2) Create a function to identify the predictor variables (column numbers) that have 50% or more NAs and remove them from the data set. 
@@ -528,7 +528,13 @@ hist(treesize(rf2), main = "number of nodes for the trees", col = "green")
 varImpPlot(rf2)
 ```
 
+*Test of the model on 2015 data*
 
+Given the cleaned up model on the 2012-2014 data, I now will apply the model to a data set it never saw before, the 2015 data.
+
+Unforutnately, the 2015 data will require some minor cleaning to prepare for testing (i.e. collapse and modify the resposne variable, remove high cardinality variables, remove nas...etc.)
+
+At the present moment I do not have a machine capable of reloading the complete lending club data so I am putting this portion of the analysis on hold.
 
 
 *Alternative random forest analysis using Ranger*
@@ -639,6 +645,3 @@ confusion_matrix(stored_pred = pred_val$predictions,
 ```
 
 
-
-## **Phase 5: tune your model with Caret
-**

@@ -1,0 +1,169 @@
+---
+title: "Testing of Variable Reduction Packages"
+author: "Michael Najarro"
+date: "10/24/2020"
+output: html_document
+---
+
+#*Objective*
+This report follows the findings of the Kaggle Lending Club analysis (LC_Analysis.Rmd) by considering the use of automated variable selection procedures as a way to expedite the process of data cleaning prior to running any algorithm for classification of the data.
+
+Due to limitations of hardware and for the purposes of testing automated variable selection procedures, I will work with the manually cleaned data I created in the LC_Analysis rmarkdown report for all procedures. Ideally, I would apply these algorithms to the a minimally cleaned version of the original data (cleaning steps would be to convert the response variable to a factor format, remove NAS, and depending on the procedure,remove factor variables if absolutely necessary).
+
+
+
+# *Boruta*
+
+```{r}
+library(pacman)
+p_load(Boruta,
+       tictoc)
+```
+
+## **Phase 1: Prepare your training and test data sets**
+
+
+#### 1.a) load your data and create test adn training sets
+
+```{r}
+#LCTF <- readRDS(file="./cleaneddata.rds")
+refineddf <- readRDS(file = "./data_for_rf.rds" )
+
+
+# create the test data
+n <- nrow(refineddf)
+
+# create the test data
+test <- sample.int(n, size = round(0.25 * n))
+test_set <- refineddf[test, ]
+nrow(test_set)
+
+#create the training data
+train_set <- refineddf[-test,]
+nrow(train_set)
+```
+
+
+## **Phase 2: Implement Boruta**
+
+### 2.a) Implement Boruta on the training set
+
+```{r}
+tic()
+boruta.train <- Boruta(chance_default~., data = train_set, doTrace =  2)
+toc()
+```
+
+
+### 2.b) assess Boruta's results
+
+As expected, due to limitations in hardware (7.7 GB of ram with a second generation I5 processor with 4 cores) Boruta completed its analysis in almost 6 hours using 99 iterations.
+
+```{r}
+# what were boruta's results?
+boruta.train
+
+# the decisions made per variable
+boruta.train$finalDecision
+```
+
+
+a plot of the variable importance, based on the importance history output.
+
+
+```{r}
+plot(boruta.train, xlab = "", xaxt = "n")
+lz<-lapply(1:ncol(boruta.train$ImpHistory), function(i)
+boruta.train$ImpHistory[is.finite(boruta.train$ImpHistory[,i]),i] )
+names(lz) <- colnames(boruta.train$ImpHistory)
+labels <- sort(sapply(lz,median))
+axis(side = 1,
+     las=2,
+     labels = names(labels),
+     at = 1:ncol(boruta.train$ImpHistory),
+     cex.axis = 0.5)
+```
+
+
+```{r}
+# pull out the importance history as a separate data frame
+#a <- as.data.frame(boruta.train$ImpHistory)
+
+# within each column, there may be infinity and negative infinity values. So you have to go through each column and pull out the numeric values.
+#lz<-lapply(1:ncol(a), function(x) a[is.finite(boruta.train$ImpHistory[,x]),x] )
+
+# convert the list to a data frame and label columns
+#lz<- data.frame(matrix(unlist(lz), nrow = 99, byrow = FALSE))
+#names(lz) <- colnames(a[,c(1:43)])
+
+# now plot the summary of each element of lz
+#ggplot2(data = lz, mapping = aes(x = ))
+
+```
+
+
+
+## **Phase 3: Use Boruta's recommendation to reduce the number of predictor variables forrandom forest model training**
+
+```{r}
+p_load(tidyverse, magrittr)
+
+str(boruta.train$finalDecision)
+levels(boruta.train$finalDecision)
+
+# create a new vector of the final decisions
+b <- c(boruta.train$finalDecision)
+
+# identify the names of the elements that were confirmed.
+j<-names(which(b==2))
+
+#keep these columns in the original data set by tossing out others.
+refineddf <- refineddf %>%
+  select(all_of(j), chance_default)
+
+saveRDS(object = refineddf, file = "./boruta_train_data.RDS")
+```
+
+
+```{r}
+readRDS(file = "./boruta_train_data.RDS")
+
+```
+
+
+
+# LASSO
+
+## **Step 5: Apply Lasso to determine if any other columns can be removed**
+
+### 2.O) Apply Lasso to see if you can remove any more variables.
+
+Application of LASSO suggests to use all numeric values.
+
+```{r}
+library(glmnet)
+
+a<- LCTF10 %>%
+  select_if(is.numeric)
+
+# 1 = safe, 0 = risk
+a$borrower_status <- as.numeric(as.factor(LCTF10$borrower_status)) - 1
+x <- model.matrix(borrower_status~., data = a)[,-43]
+y <- a$borrower_status
+
+lasso_mod <- glmnet(x, y, alpha = 0)
+
+set.seed(1443)
+lasso_cvfit <- cv.glmnet(x, y, alpha=0)
+lasso_cvfit$lambda.min # selected labda value
+
+#plot with alpha threshold
+plot(lasso_mod, xvar = "lambda")
+abline(v=log(lasso_cvfit$lambda.min))
+
+ 
+coef(lasso_cvfit, s="lambda.min")
+lasso_coefs <- as.numeric(coef(lasso_cvfit, s="lambda.min"))
+sum(abs(lasso_coefs) > 0)
+```
+
